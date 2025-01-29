@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Dreaded Pretzel</title>
+    <style>
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        button {
+            font-size: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>The Dreaded Pretzel</h1>
+    <p>Collect microphones and avoid pretzels! Press Space to jump. Hold Space to jump higher.</p>
+    <script>
+        // Basic platformer game: The Dreaded Pretzel
+
+        // HTML Setup
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 400;
+        canvas.style.border = '1px solid black';
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        let gameStarted = false;
+
+        // Add a start button
+        const startButton = document.createElement('button');
+        startButton.textContent = 'Start Game';
+        startButton.style.display = 'block';
+        startButton.style.margin = '20px auto';
+        document.body.appendChild(startButton);
+
+        // Assets
+        const player = { x: 50, y: 300, width: 16, height: 16, color: 'blue', vy: 0, onGround: false, jumpPower: 10, maxJump: -15 };
+        const microphones = [];
+        const pretzels = [];
+        const gravity = 0.5;
+        let score = 0;
+        let speed = 5;
+        let spawnRate = 120;
+        let gameFrame = 0;
+
+        // Sounds
+        let microphoneSound, gameOverSound, jumpSound;
+
+        function initializeSounds() {
+            microphoneSound = new Audio('https://www.soundjay.com/button/beep-07.wav');
+            gameOverSound = new Audio('https://www.soundjay.com/button/beep-10.wav');
+            jumpSound = new Audio('https://www.soundjay.com/button/beep-08.wav');
+            microphoneSound.load();
+            gameOverSound.load();
+            jumpSound.load();
+        }
+
+        // Controls
+        let keys = {};
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        // Utility Functions
+        function createMicrophone() {
+            microphones.push({ x: canvas.width, y: Math.random() * 300 + 50, width: 12, height: 24, color: 'gold' });
+        }
+
+        function createPretzel() {
+            pretzels.push({ x: canvas.width, y: 350, width: 20, height: 16, color: 'brown', direction: 1, offset: 0 });
+        }
+
+        function detectCollision(a, b) {
+            return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+        }
+
+        function resetGame() {
+            score = 0;
+            speed = 5;
+            spawnRate = 120;
+            gameFrame = 0;
+            player.x = 50;
+            player.y = 300;
+            player.vy = 0;
+            microphones.length = 0;
+            pretzels.length = 0;
+        }
+
+        // Drawing Functions
+        function drawPlayer(player) {
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + player.height / 2, player.width / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.fillRect(player.x + 4, player.y + 4, 4, 4); // Eye
+        }
+
+        function drawMicrophone(microphone) {
+            ctx.fillStyle = microphone.color;
+            ctx.fillRect(microphone.x, microphone.y, microphone.width, microphone.height);
+            ctx.fillStyle = 'silver';
+            ctx.fillRect(microphone.x + 4, microphone.y, 4, microphone.height - 6); // Handle
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(microphone.x + microphone.width / 2, microphone.y, 6, 0, Math.PI * 2); // Top Circle
+            ctx.fill();
+        }
+
+        function drawPretzel(pretzel) {
+            ctx.fillStyle = pretzel.color;
+            ctx.beginPath();
+            ctx.arc(pretzel.x + pretzel.width / 2, pretzel.y + pretzel.height / 2, pretzel.width / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.fillText("P", pretzel.x + 5, pretzel.y + 12); // Letter "P" for Pretzel
+        }
+
+        // Game Loop
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Gravity
+            if (!player.onGround) player.vy += gravity;
+            player.y += player.vy;
+
+            // Ground Collision
+            if (player.y + player.height >= canvas.height) {
+                player.y = canvas.height - player.height;
+                player.onGround = true;
+                player.vy = 0;
+            } else {
+                player.onGround = false;
+            }
+
+            // Controls
+            if (keys['Space']) {
+                if (player.onGround) {
+                    player.vy = -player.jumpPower;
+                    player.onGround = false;
+                    jumpSound.play();
+                } else if (player.vy < 0 && player.vy > player.maxJump) {
+                    player.vy -= 0.5; // Allow holding Space for higher jumps
+                }
+            }
+
+            // Spawn Objects
+            if (gameFrame % spawnRate === 0) {
+                createMicrophone();
+                createPretzel();
+            }
+
+            // Update Objects
+            microphones.forEach((micro, index) => {
+                micro.x -= speed;
+                if (micro.x + micro.width < 0) microphones.splice(index, 1);
+                if (detectCollision(player, micro)) {
+                    microphoneSound.play();
+                    score++;
+                    microphones.splice(index, 1);
+                }
+                drawMicrophone(micro);
+            });
+
+            pretzels.forEach((pretzel, index) => {
+                pretzel.x -= speed;
+
+                // Add side-to-side movement after 20 points
+                if (score >= 20) {
+                    let movementRange = Math.min(50, score - 20); // Wider movement range as score increases
+                    pretzel.offset += pretzel.direction * 2;
+                    if (Math.abs(pretzel.offset) > movementRange) {
+                        pretzel.direction *= -1;
+                    }
+                    pretzel.y = 350 + pretzel.offset;
+                }
+
+                if (pretzel.x + pretzel.width < 0) {
+                    if (player.y > pretzel.y) {
+                        score = Math.max(0, score - 1); // Subtract score when player goes underneath
+                    }
+                    pretzels.splice(index, 1);
+                }
+                if (detectCollision(player, pretzel)) {
+                    gameOverSound.play();
+                    resetGame();
+                }
+                drawPretzel(pretzel);
+            });
+
+            // Draw Player
+            drawPlayer(player);
+
+            // Score Display
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 20);
+
+            // Difficulty Increase
+            if (gameFrame % 500 === 0) {
+                speed += 0.5;
+                spawnRate = Math.max(30, spawnRate - 5);
+            }
+
+            gameFrame++;
+            if (gameStarted) requestAnimationFrame(update);
+        }
+
+        // Start the game after user interaction
+        startButton.addEventListener('click', () => {
+            startButton.style.display = 'none';
+            initializeSounds();
+            gameStarted = true;
+            update();
+        });
+    </script>
+</body>
+</html>
